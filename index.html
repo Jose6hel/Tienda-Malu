@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tienda Malu | Tecnología, Celulares y Accesorios</title>
+    <meta name="description" content="Explora las mejores ofertas en tecnología, celulares de última generación y accesorios en Tienda Malu. Compra segura con atención directa.">
+    <meta name="robots" content="index, follow">
+    
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://tienda-malu.vercel.app/">
+    <meta property="og:title" content="Tienda Malu | Tecnología y Celulares">
+    <meta property="og:description" content="Explora las mejores ofertas en tecnología, celulares de última generación y accesorios en Tienda Malu.">
+    <meta property="og:image" content="/src/assets/placeholder.svg">
+
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "OnlineStore",
+      "name": "Tienda Malu",
+      "url": "https://tienda-malu.vercel.app/",
+      "description": "Tienda virtual de tecnología y celulares de alta calidad.",
+      "sameAs": []
+    }
+    </script>
+</head>
+<body>
+    <div id="announcement-bar" class="announcement-bar hidden">
+        <div class="marquee-content" id="announcement-text">Cargando ofertas del día...</div>
+    </div>
+
+    <header id="main-navbar"></header>
+
+    <main id="app-root" class="container"></main>
+
+    <div id="cart-sidebar" class="cart-sidebar"></div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
+          "firebase/storage": "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js"
+        }
+      }
+    </script>
+    <script type="module" src="/src/core/router.js"></script>
+</body>
+</html>
