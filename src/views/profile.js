@@ -31,7 +31,7 @@ export function renderProfile(container) {
         return;
     }
 
-    // 2. Si el usuario está autenticado (Usamos un avatar fijo de robot por defecto)
+    // 2. Si el usuario está autenticado (Avatar estático y limpio)
     const avatarUrl = 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user.email || 'invitado');
     
     let recentProducts = [];
@@ -65,7 +65,7 @@ export function renderProfile(container) {
         <div style="max-width: 1000px; margin: 30px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 32px;">
             <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; box-shadow: var(--shadow);">
                 <div>
-                    <img id="profile-avatar-img" src="${avatarUrl}" alt="Avatar" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
+                    <img src="${avatarUrl}" alt="Avatar" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
                 </div>
                 <div style="flex-grow: 1; min-width: 200px;">
                     <h2 style="margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 700; color: var(--text);">¡Hola de nuevo!</h2>
@@ -119,22 +119,18 @@ export function renderProfile(container) {
 
 /**
  * Registra un producto en el historial de localStorage.
- * ¡Debes llamarla dentro de la vista detallada del producto!
  */
 export function trackVisitedProduct(product) {
     if (!product || !product.id) return;
     try {
         let currentViews = JSON.parse(localStorage.getItem('recent_views')) || [];
-        // Evitar duplicados
         currentViews = currentViews.filter(p => p.id !== product.id);
-        // Añadir al principio
         currentViews.unshift({
             id: product.id,
             name: product.name,
             price: product.price,
             images: product.images || (product.imageUrl ? [product.imageUrl] : [])
         });
-        // Limitar a los últimos 4 productos vistos
         if (currentViews.length > 4) currentViews.pop();
         localStorage.setItem('recent_views', JSON.stringify(currentViews));
     } catch (e) {
