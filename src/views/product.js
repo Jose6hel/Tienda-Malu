@@ -3,7 +3,6 @@ import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
 import { sanitize } from '../core/router.js';
 import { store } from '../core/store.js';
 import { openCommentsModal } from '../components/comments.js';
-import { trackVisitedProduct } from './profile.js'; // 1. Importamos la función del historial
 
 export async function renderProductDetail(container) {
     const params = new URLSearchParams(window.location.search);
@@ -40,10 +39,26 @@ export async function renderProductDetail(container) {
 
         const product = { id: productSnap.id, ...productSnap.data() };
 
-        // 2. REGISTRAMOS EL PRODUCTO EN EL HISTORIAL LOCAL DEL USUARIO
-        trackVisitedProduct(product);
+        // ==========================================================
+        // GUARDADO DIRECTO EN LOCALSTORAGE (Sin importar de profile.js)
+        // ==========================================================
+        try {
+            let currentViews = JSON.parse(localStorage.getItem('recent_views')) || [];
+            currentViews = currentViews.filter(p => p.id !== product.id);
+            currentViews.unshift({
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                images: product.images || (product.imageUrl ? [product.imageUrl] : [])
+            });
+            if (currentViews.length > 4) currentViews.pop();
+            localStorage.setItem('recent_views', JSON.stringify(currentViews));
+        } catch (e) {
+            console.error("Error al registrar historial local:", e);
+        }
+        // ==========================================================
 
-        // REGISTRO DE ANALÍTICAS EN FIRESTORE (Métrica global del Admin)
+        // REGISTRO DE ANALÍTICAS EN FIRESTORE
         await updateDoc(productRef, {
             views: increment(1)
         }).catch(err => console.error("Error al registrar analítica:", err));
