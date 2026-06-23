@@ -1,186 +1,56 @@
-import { store } from '../core/store.js';
-import { sanitize } from '../core/router.js';
-import { storage } from '../core/firebase.js'; 
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-
-/**
- * Renderiza la vista de Perfil de Usuario con su historial de navegación.
- * @param {HTMLElement} container - Contenedor principal donde se inyectará la vista.
- */
-export function renderProfile(container) {
-    if (!container) return;
-
-    const { user } = store.state;
-
-    // 1. Si el usuario no ha iniciado sesión
-    if (!user) {
-        container.innerHTML = `
-            <div style="max-width: 500px; margin: 60px auto; padding: 32px; text-align: center; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow); color: var(--text);">
-                <span style="font-size: 4rem;">🔒</span>
-                <h2 style="margin: 16px 0 8px 0; font-weight: 700;">Acceso Restringido</h2>
-                <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 24px; line-height: 1.5;">
-                    Para ver tu perfil, configurar tu avatar y revisar tu historial de productos visitados, necesitas ingresar a tu cuenta.
-                </p>
-                <button class="btn btn-primary" id="profile-login-btn" style="width: 100%; padding: 12px;">Ingresar con mi Correo</button>
-            </div>
-        `;
-
-        document.getElementById('profile-login-btn').onclick = () => {
-            const loginBtn = document.getElementById('btn-login-modal') || document.getElementById('btn-login-mobile');
-            if (loginBtn) loginBtn.click();
-        };
-        return;
-    }
-
-    // 2. Si el usuario está autenticado
-    const avatarUrl = user.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user.email || 'invitado');
+export const store = {
+    state: {
+        user: null,
+        role: 'user',
+        cart: [],
+        theme: localStorage.getItem('theme') || 'light',
+        announcement: null
+    },
+    listeners: [],
+    subscribe(listener) {
+        this.listeners.push(listener);
+        return () => { this.listeners = this.listeners.filter(l => l !== listener); };
+    },
+    setState(newState) {
+        this.state = { ...this.state, ...newState };
+        this.listeners.forEach(listener => listener(this.state));
+    },
+    addToCart(product) {
+        const existing = this.state.cart.find(item => item.id === product.id);
+        let updatedCart;
+        if (existing) {
+            updatedCart = this.state.cart.map(item => 
+                item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+            );
+        } else {
+            updatedCart = [...this.state.cart, { ...product, quantity: 1 }];
+        }
+        this.setState({ cart: updatedCart });
+    },
+    removeFromCart(productId) {
+        this.setState({ cart: this.state.cart.filter(item => item.id !== productId) });
+    },
+    updateCartQuantity(productId, quantity) {
+        if (quantity <= 0) return this.removeFromCart(productId);
+        this.setState({
+            cart: this.state.cart.map(item => item.id === productId ? { ...item, quantity } : item)
+        });
+    },
     
-    let recentProducts = [];
-    try {
-        recentProducts = JSON.parse(localStorage.getItem('recent_views')) || [];
-    } catch (e) {
-        recentProducts = [];
+    // NUEVA FUNCIÓN: Generar texto del pedido listo para WhatsApp
+    generateOrderMessage() {
+        if (this.state.cart.length === 0) return "";
+        
+        let message = "¡Hola! Me gustaría realizar el siguiente pedido en *Tienda Malu*:\n\n";
+        let total = 0;
+        
+        this.state.cart.forEach(item => {
+            const subtotal = item.price * item.quantity;
+            total += subtotal;
+            message += `• *${item.name}* (x${item.quantity}) - $${subtotal.toLocaleString()}\n`;
+        });
+        
+        message += `\n*Total a pagar:* $${total.toLocaleString()}`;
+        return encodeURIComponent(message);
     }
-
-    let historyHtml = '';
-    if (recentProducts.length === 0) {
-        historyHtml = `<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center; padding: 40px 0;">Aún no has visitado ningún producto recientemente.</p>`;
-    } else {
-        historyHtml = recentProducts.map(product => {
-            const displayImage = product.images && product.images.length > 0 ? product.images[0] : (product.imageUrl || '');
-            return `
-                <div class="card" style="cursor: pointer; display: flex; flex-direction: column;" data-product-id="${product.id}">
-                    <div class="card-img-wrapper" style="overflow: hidden; height: 180px;">
-                        <img src="${displayImage}" alt="${sanitize(product.name)}" style="width:100%; height:100%; object-fit:cover;">
-                    </div>
-                    <div class="card-body" style="padding: 12px; display: flex; flex-direction: column; flex-grow: 1;">
-                        <h3 style="font-size: 0.95rem; font-weight: 600; margin: 4px 0; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 2.4em;">${sanitize(product.name)}</h3>
-                        <p class="product-price" style="font-weight: 700; color: var(--primary); margin-top: auto;">$${product.price.toLocaleString()}</p>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    container.innerHTML = `
-        <div style="max-width: 1000px; margin: 30px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 32px;">
-            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; box-shadow: var(--shadow);">
-                <div style="position: relative;">
-                    <img id="profile-avatar-img" src="${avatarUrl}" alt="Avatar" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
-                    <button id="btn-edit-avatar" style="position: absolute; bottom: 0; right: 0; background: var(--primary); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;" title="Subir foto de perfil">✏️</button>
-                    <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
-                </div>
-                <div style="flex-grow: 1; min-width: 200px;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 700; color: var(--text);">¡Hola de nuevo!</h2>
-                    <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.95rem; font-weight: 500;">
-                        📧 Correo: <span style="color: var(--text); font-weight: 600;">${sanitize(user.email)}</span>
-                    </p>
-                    <button id="btn-logout" class="btn" style="background: #EF4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; width: fit-content; transition: background 0.2s;">
-                        🚪 Cerrar Sesión
-                    </button>
-                </div>
-            </div>
-
-            <div>
-                <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 16px; color: var(--text); display: flex; align-items: center; gap: 8px;">
-                    <span>🕒</span> Vistos Recientemente
-                </h3>
-                <div class="products-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
-                    ${historyHtml}
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Capturar clics de navegación SPA interna en las tarjetas del historial
-    container.querySelectorAll('.card[data-product-id]').forEach(card => {
-        card.onclick = (e) => {
-            e.preventDefault();
-            const productId = card.dataset.productId;
-            window.history.pushState({}, "", `/product?id=${productId}`);
-            window.dispatchEvent(new Event('popstate'));
-        };
-    });
-
-    const fileInput = document.getElementById('avatar-file-input');
-    const avatarImg = document.getElementById('profile-avatar-img');
-    const editBtn = document.getElementById('btn-edit-avatar');
-
-    // Vincular el click del botón al input oculto
-    editBtn.onclick = () => fileInput.click();
-
-    // Evento al seleccionar una foto desde el dispositivo
-    fileInput.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        editBtn.textContent = "⏳";
-        editBtn.style.pointerEvents = "none";
-
-        try {
-            // Subida a Storage
-            const storageRef = ref(storage, `avatars/${Date.now()}_${file.name}`);
-            const uploadResult = await uploadBytes(storageRef, file);
-            const downloadUrl = await getDownloadURL(uploadResult.ref);
-
-            // Sincronizar con Firebase Authentication
-            if (window.firebase) {
-                const authUser = window.firebase.auth().currentUser;
-                if (authUser) {
-                    await authUser.updateProfile({ photoURL: downloadUrl });
-                    
-                    // Forzar recarga interna del token de autenticación
-                    await authUser.reload();
-                    
-                    // Capturar la instancia refrescada para actualizar el estado global
-                    const refreshedUser = window.firebase.auth().currentUser;
-                    store.setState({ user: refreshedUser });
-                }
-            } else {
-                store.setState({ user: { ...user, photoURL: downloadUrl } });
-            }
-
-            // Cambiar imagen en el DOM
-            avatarImg.src = downloadUrl;
-            alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
-        } catch (error) {
-            console.error(error);
-            alert("Error al intentar subir la imagen: " + error.message);
-        } finally {
-            editBtn.textContent = "✏️";
-            editBtn.style.pointerEvents = "auto";
-            fileInput.value = "";
-        }
-    };
-
-    // Funcionalidad del Botón Cerrar Sesión
-    document.getElementById('btn-logout').onclick = async () => {
-        if (confirm("¿Estás seguro de que deseas cerrar tu sesión?")) {
-            try {
-                if (window.firebase) {
-                    await window.firebase.auth().signOut();
-                }
-                store.setState({ user: null });
-                
-                // Redirección SPA limpia a la raíz
-                window.history.pushState({}, "", "/");
-                window.dispatchEvent(new Event('popstate'));
-            } catch (err) {
-                alert("Error al cerrar sesión: " + err.message);
-            }
-        }
-    };
-}
-
-export function trackVisitedProduct(product) {
-    if (!product || !product.id) return;
-    try {
-        let currentViews = JSON.parse(localStorage.getItem('recent_views')) || [];
-        currentViews = currentViews.filter(p => p.id !== product.id);
-        currentViews.unshift(product);
-        if (currentViews.length > 4) currentViews.pop();
-        localStorage.setItem('recent_views', JSON.stringify(currentViews));
-    } catch (e) {
-        console.error(e);
-    }
-}
+};
