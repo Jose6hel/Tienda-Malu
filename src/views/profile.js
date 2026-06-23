@@ -1,8 +1,6 @@
 import { store } from '../core/store.js';
 import { sanitize } from '../core/router.js';
-import { auth, storage } from '../core/firebase.js'; 
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { updateProfile } from "firebase/auth";
+import { auth } from '../core/firebase.js'; 
 
 /**
  * Renderiza la vista de Perfil de Usuario con su historial de navegación.
@@ -20,7 +18,7 @@ export function renderProfile(container) {
                 <span style="font-size: 4rem;">🔒</span>
                 <h2 style="margin: 16px 0 8px 0; font-weight: 700;">Acceso Restringido</h2>
                 <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 24px; line-height: 1.5;">
-                    Para ver tu perfil, configurar tu avatar y revisar tu historial de productos visitados, necesitas ingresar a tu cuenta.
+                    Para ver tu perfil y revisar tu historial de productos visitados, necesitas ingresar a tu cuenta.
                 </p>
                 <button class="btn btn-primary" id="profile-login-btn" style="width: 100%; padding: 12px;">Ingresar con mi Correo</button>
             </div>
@@ -33,8 +31,8 @@ export function renderProfile(container) {
         return;
     }
 
-    // 2. Si el usuario está autenticado
-    const avatarUrl = user.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user.email || 'invitado');
+    // 2. Si el usuario está autenticado (Usamos un avatar fijo de robot por defecto)
+    const avatarUrl = 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user.email || 'invitado');
     
     let recentProducts = [];
     try {
@@ -66,10 +64,8 @@ export function renderProfile(container) {
     container.innerHTML = `
         <div style="max-width: 1000px; margin: 30px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 32px;">
             <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; box-shadow: var(--shadow);">
-                <div style="position: relative;">
+                <div>
                     <img id="profile-avatar-img" src="${avatarUrl}" alt="Avatar" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
-                    <button id="btn-edit-avatar" style="position: absolute; bottom: 0; right: 0; background: var(--primary); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;" title="Subir foto de perfil">✏️</button>
-                    <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
                 </div>
                 <div style="flex-grow: 1; min-width: 200px;">
                     <h2 style="margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 700; color: var(--text);">¡Hola de nuevo!</h2>
@@ -93,7 +89,7 @@ export function renderProfile(container) {
         </div>
     `;
 
-    // Capturar clics de navegación SPA interna en las tarjetas del historial
+    // Capturar clics de navegación SPA en las tarjetas del historial
     container.querySelectorAll('.card[data-product-id]').forEach(card => {
         card.onclick = (e) => {
             e.preventDefault();
@@ -102,75 +98,6 @@ export function renderProfile(container) {
             window.dispatchEvent(new Event('popstate'));
         };
     });
-
-    const fileInput = document.getElementById('avatar-file-input');
-    const avatarImg = document.getElementById('profile-avatar-img');
-    const editBtn = document.getElementById('btn-edit-avatar');
-
-    if (editBtn) {
-        editBtn.onclick = () => fileInput.click();
-    }
-
-    if (fileInput) {
-        fileInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            editBtn.textContent = "⏳";
-            editBtn.style.pointerEvents = "none";
-
-            // Validar de antemano que las instancias no sean nulas o indefinidas
-            if (!storage) {
-                alert("Error de configuración: La instancia de Firebase Storage no está cargada correctamente.");
-                editBtn.textContent = "✏️";
-                editBtn.style.pointerEvents = "auto";
-                return;
-            }
-
-            try {
-                // Generar un nombre único limpio para el archivo
-                const fileExtension = file.name.split('.').pop();
-                const fileName = `avatars/${Date.now()}_perfil.${fileExtension}`;
-                
-                // 1. Crear referencia explícita usando la instancia directa de tu core
-                const storageRef = ref(storage, fileName);
-                
-                // 2. Ejecutar subida de bytes
-                const snapshot = await uploadBytes(storageRef, file);
-                const downloadUrl = await getDownloadURL(snapshot.ref);
-
-                // 3. Obtener el usuario activo de la instancia de autenticación directa
-                const authUser = auth.currentUser;
-                
-                if (authUser) {
-                    await updateProfile(authUser, { photoURL: downloadUrl });
-                    
-                    // Sincronizar el store local
-                    store.setState({ 
-                        user: {
-                            uid: authUser.uid,
-                            email: authUser.email,
-                            displayName: authUser.displayName,
-                            photoURL: downloadUrl
-                        } 
-                    });
-                    
-                    if (avatarImg) avatarImg.src = downloadUrl;
-                    alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
-                } else {
-                    alert("No se detectó un usuario autenticado activo en la sesión.");
-                }
-            } catch (error) {
-                console.error("Error capturado detalladamente:", error);
-                // Si el error tiene un código interno de Firebase de permisos, lo sabremos aquí
-                alert(`Error devuelto por el sistema:\n${error.message || error}`);
-            } finally {
-                editBtn.textContent = "✏️";
-                editBtn.style.pointerEvents = "auto";
-                fileInput.value = "";
-            }
-        };
-    }
 
     // Funcionalidad del Botón Cerrar Sesión
     const logoutBtn = document.getElementById('btn-logout');
@@ -190,15 +117,27 @@ export function renderProfile(container) {
     }
 }
 
+/**
+ * Registra un producto en el historial de localStorage.
+ * ¡Debes llamarla dentro de la vista detallada del producto!
+ */
 export function trackVisitedProduct(product) {
     if (!product || !product.id) return;
     try {
         let currentViews = JSON.parse(localStorage.getItem('recent_views')) || [];
+        // Evitar duplicados
         currentViews = currentViews.filter(p => p.id !== product.id);
-        currentViews.unshift(product);
+        // Añadir al principio
+        currentViews.unshift({
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            images: product.images || (product.imageUrl ? [product.imageUrl] : [])
+        });
+        // Limitar a los últimos 4 productos vistos
         if (currentViews.length > 4) currentViews.pop();
         localStorage.setItem('recent_views', JSON.stringify(currentViews));
     } catch (e) {
-        console.error(e);
+        console.error("Error al registrar historial de vista:", e);
     }
 }
