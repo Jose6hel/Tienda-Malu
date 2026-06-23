@@ -1,7 +1,5 @@
 import { store } from '../core/store.js';
 import { sanitize } from '../core/router.js';
-import { storage } from '../core/firebase.js'; 
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /**
  * Renderiza la vista de Perfil de Usuario con su historial de navegación.
@@ -118,33 +116,37 @@ export function renderProfile(container) {
         editBtn.style.pointerEvents = "none";
 
         try {
-            // Subida a Storage
-            const storageRef = ref(storage, `avatars/${Date.now()}_${file.name}`);
-            const uploadResult = await uploadBytes(storageRef, file);
-            const downloadUrl = await getDownloadURL(uploadResult.ref);
-
-            // Sincronizar con Firebase Authentication
             if (window.firebase) {
+                // Generar referencia en Firebase Storage
+                const storageRef = window.firebase.storage().ref(`avatars/${Date.now()}_${file.name}`);
+                
+                // Subir el archivo binario de forma nativa
+                const snapshot = await storageRef.put(file);
+                
+                // Obtener la URL de descarga del archivo subido
+                const downloadUrl = await snapshot.ref.getDownloadURL();
+
                 const authUser = window.firebase.auth().currentUser;
                 if (authUser) {
+                    // Actualizar el photoURL en los servidores de Firebase
                     await authUser.updateProfile({ photoURL: downloadUrl });
                     
-                    // Forzar recarga interna del token de autenticación
+                    // Sincronizar de forma estricta los tokens locales de sesión
                     await authUser.reload();
                     
-                    // Capturar la instancia refrescada para actualizar el estado global
+                    // Volver a capturar la instancia fresca del usuario para actualizar el store
                     const refreshedUser = window.firebase.auth().currentUser;
                     store.setState({ user: refreshedUser });
+                    
+                    // Refrescar inmediatamente el elemento en pantalla
+                    avatarImg.src = downloadUrl;
+                    alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
                 }
             } else {
-                store.setState({ user: { ...user, photoURL: downloadUrl } });
+                throw new Error("No se detectó la instancia global de Firebase.");
             }
-
-            // Cambiar imagen en el DOM
-            avatarImg.src = downloadUrl;
-            alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
         } catch (error) {
-            console.error(error);
+            console.error("Error completo en la subida:", error);
             alert("Error al intentar subir la imagen: " + error.message);
         } finally {
             editBtn.textContent = "✏️";
