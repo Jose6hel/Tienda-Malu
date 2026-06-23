@@ -1,7 +1,5 @@
 import { store } from '../core/store.js';
 import { sanitize } from '../core/router.js';
-import { storage } from '../core/firebase.js'; // Importamos storage para la subida nativa
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /**
  * Renderiza la vista de Perfil de Usuario con su historial de navegación.
@@ -10,159 +8,189 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 export function renderProfile(container) {
     if (!container) return;
 
-    const { user } = store.state;
+    // Bloque de seguridad global para evitar que la página se quede en blanco si Firebase falla
+    try {
+        const { user } = store.state;
 
-    // 1. Si el usuario no ha iniciado sesión
-    if (!user) {
+        // 1. Si el usuario no ha iniciado sesión
+        if (!user) {
+            container.innerHTML = `
+                <div style="max-width: 500px; margin: 60px auto; padding: 32px; text-align: center; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow); color: var(--text);">
+                    <span style="font-size: 4rem;">🔒</span>
+                    <h2 style="margin: 16px 0 8px 0; font-weight: 700;">Acceso Restringido</h2>
+                    <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 24px; line-height: 1.5;">
+                        Para ver tu perfil, configurar tu avatar y revisar tu historial de productos visitados, necesitas ingresar a tu cuenta.
+                    </p>
+                    <button class="btn btn-primary" id="profile-login-btn" style="width: 100%; padding: 12px;">Ingresar con mi Correo</button>
+                </div>
+            `;
+
+            const loginBtn = document.getElementById('profile-login-btn');
+            if (loginBtn) {
+                loginBtn.onclick = () => {
+                    const globalLoginBtn = document.getElementById('btn-login-modal') || document.getElementById('btn-login-mobile');
+                    if (globalLoginBtn) globalLoginBtn.click();
+                };
+            }
+            return;
+        }
+
+        // 2. Si el usuario está autenticado
+        const avatarUrl = user.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user.email || 'invitado');
+        
+        let recentProducts = [];
+        try {
+            recentProducts = JSON.parse(localStorage.getItem('recent_views')) || [];
+        } catch (e) {
+            recentProducts = [];
+        }
+
+        let historyHtml = '';
+        if (recentProducts.length === 0) {
+            historyHtml = `<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center; padding: 40px 0;">Aún no has visitado ningún producto recientemente.</p>`;
+        } else {
+            historyHtml = recentProducts.map(product => {
+                const displayImage = product.images && product.images.length > 0 ? product.images[0] : (product.imageUrl || '');
+                return `
+                    <div class="card" style="cursor: pointer; display: flex; flex-direction: column;" data-product-id="${product.id}">
+                        <div class="card-img-wrapper" style="overflow: hidden; height: 180px;">
+                            <img src="${displayImage}" alt="${sanitize(product.name)}" style="width:100%; height:100%; object-fit:cover;">
+                        </div>
+                        <div class="card-body" style="padding: 12px; display: flex; flex-direction: column; flex-grow: 1;">
+                            <h3 style="font-size: 0.95rem; font-weight: 600; margin: 4px 0; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 2.4em;">${sanitize(product.name)}</h3>
+                            <p class="product-price" style="font-weight: 700; color: var(--primary); margin-top: auto;">$${product.price.toLocaleString()}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         container.innerHTML = `
-            <div style="max-width: 500px; margin: 60px auto; padding: 32px; text-align: center; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow); color: var(--text);">
-                <span style="font-size: 4rem;">🔒</span>
-                <h2 style="margin: 16px 0 8px 0; font-weight: 700;">Acceso Restringido</h2>
-                <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 24px; line-height: 1.5;">
-                    Para ver tu perfil, configurar tu avatar y revisar tu historial de productos visitados, necesitas ingresar a tu cuenta.
-                </p>
-                <button class="btn btn-primary" id="profile-login-btn" style="width: 100%; padding: 12px;">Ingresar con mi Correo</button>
+            <div style="max-width: 1000px; margin: 30px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 32px;">
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; box-shadow: var(--shadow);">
+                    <div style="position: relative;">
+                        <img id="profile-avatar-img" src="${avatarUrl}" alt="Avatar" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
+                        <button id="btn-edit-avatar" style="position: absolute; bottom: 0; right: 0; background: var(--primary); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;" title="Subir foto de perfil">✏️</button>
+                        <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
+                    </div>
+                    <div style="flex-grow: 1; min-width: 200px;">
+                        <h2 style="margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 700; color: var(--text);">¡Hola de nuevo!</h2>
+                        <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.95rem; font-weight: 500;">
+                            📧 Correo: <span style="color: var(--text); font-weight: 600;">${sanitize(user.email)}</span>
+                        </p>
+                        <button id="btn-logout" class="btn" style="background: #EF4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; width: fit-content; transition: background 0.2s;">
+                            🚪 Cerrar Sesión
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 16px; color: var(--text); display: flex; align-items: center; gap: 8px;">
+                        <span>🕒</span> Vistos Recientemente
+                    </h3>
+                    <div class="products-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
+                        ${historyHtml}
+                    </div>
+                </div>
             </div>
         `;
 
-        document.getElementById('profile-login-btn').onclick = () => {
-            const loginBtn = document.getElementById('btn-login-modal') || document.getElementById('btn-login-mobile');
-            if (loginBtn) loginBtn.click();
-        };
-        return;
-    }
-
-    // 2. Si el usuario está autenticado
-    const avatarUrl = user.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user.email || 'invitado');
-    
-    let recentProducts = [];
-    try {
-        recentProducts = JSON.parse(localStorage.getItem('recent_views')) || [];
-    } catch (e) {
-        recentProducts = [];
-    }
-
-    let historyHtml = '';
-    if (recentProducts.length === 0) {
-        historyHtml = `<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center; padding: 40px 0;">Aún no has visitado ningún producto recientemente.</p>`;
-    } else {
-        historyHtml = recentProducts.map(product => {
-            const displayImage = product.images && product.images.length > 0 ? product.images[0] : (product.imageUrl || '');
-            return `
-                <div class="card" style="cursor: pointer; display: flex; flex-direction: column;" data-product-id="${product.id}">
-                    <div class="card-img-wrapper" style="overflow: hidden; height: 180px;">
-                        <img src="${displayImage}" alt="${sanitize(product.name)}" style="width:100%; height:100%; object-fit:cover;">
-                    </div>
-                    <div class="card-body" style="padding: 12px; display: flex; flex-direction: column; flex-grow: 1;">
-                        <h3 style="font-size: 0.95rem; font-weight: 600; margin: 4px 0; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 2.4em;">${sanitize(product.name)}</h3>
-                        <p class="product-price" style="font-weight: 700; color: var(--primary); margin-top: auto;">$${product.price.toLocaleString()}</p>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    container.innerHTML = `
-        <div style="max-width: 1000px; margin: 30px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 32px;">
-            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; box-shadow: var(--shadow);">
-                <div style="position: relative;">
-                    <img id="profile-avatar-img" src="${avatarUrl}" alt="Avatar" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
-                    <button id="btn-edit-avatar" style="position: absolute; bottom: 0; right: 0; background: var(--primary); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;" title="Subir foto de perfil">✏️</button>
-                    <!-- Input oculto nativo para archivos de imagen -->
-                    <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
-                </div>
-                <div style="flex-grow: 1; min-width: 200px;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 700; color: var(--text);">¡Hola de nuevo!</h2>
-                    <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.95rem; font-weight: 500;">
-                        📧 Correo: <span style="color: var(--text); font-weight: 600;">${sanitize(user.email)}</span>
-                    </p>
-                    <!-- Botón Cerrar Sesión añadido -->
-                    <button id="btn-logout" class="btn" style="background: #EF4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; width: fit-content; transition: background 0.2s;">
-                        🚪 Cerrar Sesión
-                    </button>
-                </div>
-            </div>
-
-            <div>
-                <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 16px; color: var(--text); display: flex; align-items: center; gap: 8px;">
-                    <span>🕒</span> Vistos Recientemente
-                </h3>
-                <div class="products-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
-                    ${historyHtml}
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Capturar clics de navegación SPA interna en las tarjetas del historial
-    container.querySelectorAll('.card[data-product-id]').forEach(card => {
-        card.onclick = (e) => {
-            e.preventDefault();
-            const productId = card.dataset.productId;
-            window.history.pushState({}, "", `/product?id=${productId}`);
-            window.dispatchEvent(new Event('popstate'));
-        };
-    });
-
-    const fileInput = document.getElementById('avatar-file-input');
-    const avatarImg = document.getElementById('profile-avatar-img');
-    const editBtn = document.getElementById('btn-edit-avatar');
-
-    // Al darle click al lápiz, simulamos el click en el input file oculto
-    editBtn.onclick = () => fileInput.click();
-
-    // Evento al seleccionar la foto desde el explorador del dispositivo
-    fileInput.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        editBtn.textContent = "⏳";
-        editBtn.style.pointerEvents = "none";
-
-        try {
-            // Guardamos la imagen en Firebase Storage dentro de una carpeta avatars organizada por el UID o timestamp
-            const storageRef = ref(storage, `avatars/${Date.now()}_${file.name}`);
-            const uploadResult = await uploadBytes(storageRef, file);
-            const downloadUrl = await getDownloadURL(uploadResult.ref);
-
-            // Actualizamos el perfil en el objeto global de autenticación si existe
-            if (window.firebase) {
-                const authUser = window.firebase.auth().currentUser;
-                if (authUser) await authUser.updateProfile({ photoURL: downloadUrl });
-            }
-
-            // Sincronizamos el estado de la aplicación
-            store.setState({ user: { ...user, photoURL: downloadUrl } });
-            avatarImg.src = downloadUrl;
-
-            alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
-        } catch (error) {
-            alert("Error al intentar subir la imagen: " + error.message);
-        } finally {
-            editBtn.textContent = "✏️";
-            editBtn.style.pointerEvents = "auto";
-            fileInput.value = ""; // Reseteamos el input
-        }
-    };
-
-    // Funcionalidad del Botón Cerrar Sesión
-    document.getElementById('btn-logout').onclick = async () => {
-        if (confirm("¿Estás seguro de que deseas cerrar tu sesión?")) {
-            try {
-                if (window.firebase) {
-                    await window.firebase.auth().signOut();
-                }
-                // Limpiamos el usuario en el store para refrescar la interfaz
-                store.setState({ user: null });
-                
-                // Redirigimos al Home usando el enrutador virtual de tu SPA
-                window.history.pushState({}, "", "/");
+        // Asignación segura de rutas SPA
+        container.querySelectorAll('.card[data-product-id]').forEach(card => {
+            card.onclick = (e) => {
+                e.preventDefault();
+                const productId = card.dataset.productId;
+                window.history.pushState({}, "", `/product?id=${productId}`);
                 window.dispatchEvent(new Event('popstate'));
-            } catch (err) {
-                alert("Error al cerrar sesión: " + err.message);
-            }
+            };
+        });
+
+        const fileInput = document.getElementById('avatar-file-input');
+        const avatarImg = document.getElementById('profile-avatar-img');
+        const editBtn = document.getElementById('btn-edit-avatar');
+        const logoutBtn = document.getElementById('btn-logout');
+
+        // Manejador del Input de archivos
+        if (editBtn && fileInput) {
+            editBtn.onclick = () => fileInput.click();
+
+            fileInput.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                editBtn.textContent = "⏳";
+                editBtn.style.pointerEvents = "none";
+
+                try {
+                    if (window.firebase && typeof window.firebase.storage === 'function') {
+                        const storageRef = window.firebase.storage().ref(`avatars/${Date.now()}_${file.name}`);
+                        const snapshot = await storageRef.put(file);
+                        const downloadUrl = await snapshot.ref.getDownloadURL();
+
+                        const authUser = window.firebase.auth().currentUser;
+                        if (authUser) {
+                            await authUser.updateProfile({ photoURL: downloadUrl });
+                            await authUser.reload();
+                            
+                            const refreshedUser = window.firebase.auth().currentUser;
+                            store.setState({ user: refreshedUser });
+                            
+                            if (avatarImg) avatarImg.src = downloadUrl;
+                            alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
+                        }
+                    } else {
+                        // Fallback clásico si storage no está instanciado globalmente
+                        const newUrl = prompt("Ingresa la URL de tu foto de perfil:", user.photoURL || "");
+                        if (newUrl) {
+                            const authUser = window.firebase ? window.firebase.auth().currentUser : null;
+                            if (authUser) {
+                                await authUser.updateProfile({ photoURL: newUrl });
+                                await authUser.reload();
+                                store.setState({ user: window.firebase.auth().currentUser });
+                                if (avatarImg) avatarImg.src = newUrl;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error al subir archivo:", error);
+                    alert("Ajuste de subida: " + error.message);
+                } finally {
+                    editBtn.textContent = "✏️";
+                    editBtn.style.pointerEvents = "auto";
+                    fileInput.value = "";
+                }
+            };
         }
-    };
+
+        // Manejador de Cerrar Sesión
+        if (logoutBtn) {
+            logoutBtn.onclick = async () => {
+                if (confirm("¿Estás seguro de que deseas cerrar tu sesión?")) {
+                    try {
+                        if (window.firebase) {
+                            await window.firebase.auth().signOut();
+                        }
+                        store.setState({ user: null });
+                        window.history.pushState({}, "", "/");
+                        window.dispatchEvent(new Event('popstate'));
+                    } catch (err) {
+                        alert("Error al cerrar sesión: " + err.message);
+                    }
+                }
+            };
+        }
+
+    } catch (globalError) {
+        // Si hay un error crítico imprevisto, se renderiza un aviso en vez de congelar la pantalla
+        console.error("Error crítico en renderProfile:", globalError);
+        container.innerHTML = `
+            <div style="padding: 20px; text-align: center; color: red;">
+                <h3>Ocurrió un error al cargar el perfil</h3>
+                <p>${globalError.message}</p>
+                <button onclick="location.reload()" class="btn">Reintentar</button>
+            </div>
+        `;
+    }
 }
 
 export function trackVisitedProduct(product) {
