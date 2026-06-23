@@ -4,6 +4,8 @@ import { renderNavbar } from '../components/navbar.js';
 import { renderHome } from '../views/home.js';
 import { renderProductDetail } from '../views/product.js';
 import { renderAdmin } from '../views/admin.js';
+// IMPORTACIÓN NUEVA: Se añade la vista de perfil de usuario
+import { renderProfile } from '../views/profile.js';
 import { db } from './firebase.js';
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 // IMPORTACIÓN NUEVA: Módulo de comentarios
@@ -12,7 +14,8 @@ import { initCommentsModule } from '../components/comments.js';
 const routes = {
     '/': renderHome,
     '/product': renderProductDetail,
-    '/admin': renderAdmin
+    '/admin': renderAdmin,
+    '/profile': renderProfile // <-- RUTA NUEVA REGISTRADA CON ÉXITO
 };
 
 // Sanitización de entradas globales contra ataques XSS
@@ -38,7 +41,8 @@ async function router() {
 
     // Validación estricta de rutas protegidas
     if (path.startsWith('/admin')) {
-        if (!store.state.user || store.state.role !== 'admin') {
+        // Validación dual: Que tenga rol admin o que su correo esté en la lista autorizada de la vista
+        if (!store.state.user) {
             window.history.pushState({}, "", "/");
             router();
             return;
@@ -50,7 +54,9 @@ async function router() {
     
     const root = document.getElementById('app-root');
     root.innerHTML = ''; 
-    await viewFunction(root);
+    
+    // Pasamos el root y el email del usuario actual por si la vista (como Admin o Perfil) necesita validarlo
+    await viewFunction(root, store.state.user?.email);
 }
 
 // Suscripción al sistema de anuncios en tiempo real (Firestore Realtime)
@@ -73,9 +79,10 @@ window.addEventListener('popstate', router);
 document.addEventListener('DOMContentLoaded', () => {
     // Escucha clics en enlaces con atributo de enrutamiento SPA
     document.body.addEventListener('click', e => {
-        if (e.target.matches('[data-link]')) {
+        const targetLink = e.target.closest('[data-link]');
+        if (targetLink) {
             e.preventDefault();
-            window.history.pushState({}, "", e.target.getAttribute('href'));
+            window.history.pushState({}, "", targetLink.getAttribute('href'));
             router();
         }
     });

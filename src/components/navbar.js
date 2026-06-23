@@ -9,43 +9,113 @@ export function renderNavbar() {
 
     document.documentElement.setAttribute('data-theme', theme);
 
+    // Imagen de perfil dinámica basada en el correo del usuario conectado o un avatar por defecto
+    const avatarUrl = user?.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user?.email || 'invitado');
+
     nav.innerHTML = `
-        <nav class="navbar" style="box-shadow: 0 2px 4px rgba(168, 85, 247, 0.05);">
+        <nav class="navbar nav-desktop" style="box-shadow: 0 2px 4px rgba(168, 85, 247, 0.05); position: sticky; top: 0; z-index: 100; background: var(--surface);">
             <a href="/" class="nav-logo" data-link>TIENDA MALU</a>
             <div class="nav-actions">
                 <button class="btn-icon" id="theme-toggle" style="transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">${theme === 'light' ? '🌙' : '☀️'}</button>
                 <button class="btn-icon" id="cart-toggle" style="transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">🛒 <span class="badge">${totalItems}</span></button>
+                
                 ${role === 'admin' ? '<a href="/admin" class="btn btn-primary" style="padding:6px 12px; font-size:14px;" data-link>Panel</a>' : ''}
+                
                 ${user ? `
+                    <a href="/profile" data-link style="display: flex; align-items: center; gap: 6px; text-decoration: none; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border);">
+                        <img src="${avatarUrl}" alt="Perfil" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                        <span style="font-size: 13px; color: var(--text); max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${sanitize(user.email.split('@')[0])}</span>
+                    </a>
                     <button class="btn btn-primary" id="btn-logout" style="padding:6px 12px; font-size:14px; background:#475569;">Salir</button>
                 ` : `
                     <button class="btn btn-primary" id="btn-login-modal" style="padding:6px 12px; font-size:14px;">Ingresar</button>
                 `}
             </div>
         </nav>
+
+        <nav class="nav-mobile-tabs" style="position: fixed; bottom: 0; left: 0; width: 100%; background: var(--surface); border-top: 1px solid var(--border); display: flex; justify-content: space-around; align-items: center; padding: 8px 0; z-index: 100; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);">
+            <div onclick="window.location.href='/'" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
+                <span style="font-size: 18px;">🏠</span>
+                <span style="font-size: 11px; color: var(--text); font-weight: 500;">Inicio</span>
+            </div>
+
+            <div id="cart-toggle-mobile" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; position: relative;">
+                <span style="font-size: 18px;">🛒</span>
+                <span style="font-size: 11px; color: var(--text); font-weight: 500;">Carrito</span>
+                ${totalItems > 0 ? `<span class="badge" style="position: absolute; top: -4px; right: -4px; background: #EF4444; color: white; border-radius: 50%; min-width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold;">${totalItems}</span>` : ''}
+            </div>
+
+            <div id="theme-toggle-mobile" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
+                <span style="font-size: 18px;">${theme === 'light' ? '🌙' : '☀️'}</span>
+                <span style="font-size: 11px; color: var(--text); font-weight: 500;">Tema</span>
+            </div>
+
+            ${user ? `
+                <div onclick="window.location.href='/profile'" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
+                    <img src="${avatarUrl}" alt="Perfil" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover; border: 1px solid var(--primary);">
+                    <span style="font-size: 11px; color: var(--text); font-weight: 500;">Perfil</span>
+                </div>
+            ` : `
+                <div id="btn-login-mobile" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
+                    <span style="font-size: 18px;">🔑</span>
+                    <span style="font-size: 11px; color: var(--text); font-weight: 500;">Ingresar</span>
+                </div>
+            `}
+        </nav>
+
+        <style>
+            @media (max-width: 768px) {
+                .nav-desktop { display: none !important; }
+                body { padding-bottom: 64px !important; } /* Margen inferior para que las pestañas no tapen el contenido */
+            }
+            @media (min-width: 769px) {
+                .nav-mobile-tabs { display: none !important; }
+            }
+        </style>
     `;
 
     // Renderizado del Sidebar del Carrito
     renderCartSidebar();
 
-    // Eventos del Navbar
-    document.getElementById('theme-toggle').onclick = () => {
-        const nextTheme = theme === 'light' ? 'dark' : 'light';
-        localStorage.setItem('theme', nextTheme);
-        store.setState({ theme: nextTheme });
-    };
+    // --- Vinculación de Eventos (Soporte Escritorio y Móvil sin alterar lógica) ---
 
+    // Manejo de Cambio de Tema (Escritorio)
+    document.getElementById('theme-toggle').onclick = () => toggleAppTheme(theme);
+
+    // Manejo de Cambio de Tema (Móvil)
+    document.getElementById('theme-toggle-mobile').onclick = () => toggleAppTheme(theme);
+
+    // Abrir Carrito (Escritorio)
     document.getElementById('cart-toggle').onclick = () => {
         document.getElementById('cart-sidebar').classList.add('open');
     };
 
+    // Abrir Carrito (Móvil)
+    document.getElementById('cart-toggle-mobile').onclick = () => {
+        document.getElementById('cart-sidebar').classList.add('open');
+    };
+
+    // Botón Salir (Solo si está autenticado)
     if (document.getElementById('btn-logout')) {
         document.getElementById('btn-logout').onclick = logout;
     }
 
+    // Botón Ingresar (Escritorio)
     if (document.getElementById('btn-login-modal')) {
         document.getElementById('btn-login-modal').onclick = showLoginPrompt;
     }
+
+    // Botón Ingresar (Móvil)
+    if (document.getElementById('btn-login-mobile')) {
+        document.getElementById('btn-login-mobile').onclick = showLoginPrompt;
+    }
+}
+
+// Función auxiliar para centralizar la conmutación de temas
+function toggleAppTheme(currentTheme) {
+    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', nextTheme);
+    store.setState({ theme: nextTheme });
 }
 
 function showLoginPrompt() {
