@@ -1,7 +1,5 @@
 import { store } from '../core/store.js';
 import { sanitize } from '../core/router.js';
-import { storage } from '../core/firebase.js'; 
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /**
  * Renderiza la vista de Perfil de Usuario con su historial de navegación.
@@ -109,7 +107,7 @@ export function renderProfile(container) {
     // Vincular el click del botón al input oculto
     editBtn.onclick = () => fileInput.click();
 
-    // Evento al seleccionar una foto desde el dispositivo
+    // Evento al seleccionar una foto desde el dispositivo (Utilizando Firebase Clásico)
     fileInput.onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -118,31 +116,34 @@ export function renderProfile(container) {
         editBtn.style.pointerEvents = "none";
 
         try {
-            // Subida a Storage
-            const storageRef = ref(storage, `avatars/${Date.now()}_${file.name}`);
-            const uploadResult = await uploadBytes(storageRef, file);
-            const downloadUrl = await getDownloadURL(uploadResult.ref);
-
-            // Sincronizar con Firebase Authentication
             if (window.firebase) {
+                // Referencia en el Storage clásico sin dependencias modulares
+                const storageRef = window.firebase.storage().ref(`avatars/${Date.now()}_${file.name}`);
+                
+                // Subir archivo al Storage
+                const snapshot = await storageRef.put(file);
+                // Obtener la URL de descarga pública
+                const downloadUrl = await snapshot.ref.getDownloadURL();
+
                 const authUser = window.firebase.auth().currentUser;
                 if (authUser) {
+                    // Actualizar perfil en Auth
                     await authUser.updateProfile({ photoURL: downloadUrl });
                     
-                    // Forzar recarga interna del token de autenticación
+                    // Sincronizar cambios en local de forma estricta
                     await authUser.reload();
                     
-                    // Capturar la instancia refrescada para actualizar el estado global
+                    // Refrescar el Store global
                     const refreshedUser = window.firebase.auth().currentUser;
                     store.setState({ user: refreshedUser });
+                    
+                    // Modificar la imagen en pantalla
+                    avatarImg.src = downloadUrl;
+                    alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
                 }
             } else {
-                store.setState({ user: { ...user, photoURL: downloadUrl } });
+                throw new Error("No se detectó la instancia global de Firebase.");
             }
-
-            // Cambiar imagen en el DOM
-            avatarImg.src = downloadUrl;
-            alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
         } catch (error) {
             console.error(error);
             alert("Error al intentar subir la imagen: " + error.message);
