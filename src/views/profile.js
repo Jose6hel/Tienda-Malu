@@ -1,5 +1,7 @@
 import { store } from '../core/store.js';
 import { sanitize } from '../core/router.js';
+import { storage } from '../core/firebase.js'; // Importamos storage para la subida nativa
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /**
  * Renderiza la vista de Perfil de Usuario con su historial de navegación.
@@ -40,7 +42,6 @@ export function renderProfile(container) {
         recentProducts = [];
     }
 
-    // Renderizado local e independiente (Agregamos data-product-id para el manejo del enrutador SPA)
     let historyHtml = '';
     if (recentProducts.length === 0) {
         historyHtml = `<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center; padding: 40px 0;">Aún no has visitado ningún producto recientemente.</p>`;
@@ -66,13 +67,19 @@ export function renderProfile(container) {
             <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; box-shadow: var(--shadow);">
                 <div style="position: relative;">
                     <img id="profile-avatar-img" src="${avatarUrl}" alt="Avatar" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary);">
-                    <button id="btn-edit-avatar" style="position: absolute; bottom: 0; right: 0; background: var(--primary); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;" title="Cambiar foto">✏️</button>
+                    <button id="btn-edit-avatar" style="position: absolute; bottom: 0; right: 0; background: var(--primary); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;" title="Subir foto de perfil">✏️</button>
+                    <!-- Input oculto nativo para archivos de imagen -->
+                    <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
                 </div>
-                <div style="flex-grow: 1;">
+                <div style="flex-grow: 1; min-width: 200px;">
                     <h2 style="margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 700; color: var(--text);">¡Hola de nuevo!</h2>
-                    <p style="margin: 0; color: var(--text-muted); font-size: 0.95rem; font-weight: 500;">
+                    <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.95rem; font-weight: 500;">
                         📧 Correo: <span style="color: var(--text); font-weight: 600;">${sanitize(user.email)}</span>
                     </p>
+                    <!-- Botón Cerrar Sesión añadido -->
+                    <button id="btn-logout" class="btn" style="background: #EF4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; width: fit-content; transition: background 0.2s;">
+                        🚪 Cerrar Sesión
+                    </button>
                 </div>
             </div>
 
@@ -92,28 +99,67 @@ export function renderProfile(container) {
         card.onclick = (e) => {
             e.preventDefault();
             const productId = card.dataset.productId;
-            
-            // Cambiar URL en la barra de direcciones de forma virtual
             window.history.pushState({}, "", `/product?id=${productId}`);
-            
-            // Notificar al enrutador global que procese la nueva vista
             window.dispatchEvent(new Event('popstate'));
         };
     });
 
-    // Evento para editar foto de perfil
-    document.getElementById('btn-edit-avatar').onclick = async () => {
-        const newPhotoUrl = prompt("Introduce la URL de tu nueva foto de perfil:", user.photoURL || "");
-        if (newPhotoUrl !== null) {
+    const fileInput = document.getElementById('avatar-file-input');
+    const avatarImg = document.getElementById('profile-avatar-img');
+    const editBtn = document.getElementById('btn-edit-avatar');
+
+    // Al darle click al lápiz, simulamos el click en el input file oculto
+    editBtn.onclick = () => fileInput.click();
+
+    // Evento al seleccionar la foto desde el explorador del dispositivo
+    fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        editBtn.textContent = "⏳";
+        editBtn.style.pointerEvents = "none";
+
+        try {
+            // Guardamos la imagen en Firebase Storage dentro de una carpeta avatars organizada por el UID o timestamp
+            const storageRef = ref(storage, `avatars/${Date.now()}_${file.name}`);
+            const uploadResult = await uploadBytes(storageRef, file);
+            const downloadUrl = await getDownloadURL(uploadResult.ref);
+
+            // Actualizamos el perfil en el objeto global de autenticación si existe
+            if (window.firebase) {
+                const authUser = window.firebase.auth().currentUser;
+                if (authUser) await authUser.updateProfile({ photoURL: downloadUrl });
+            }
+
+            // Sincronizamos el estado de la aplicación
+            store.setState({ user: { ...user, photoURL: downloadUrl } });
+            avatarImg.src = downloadUrl;
+
+            alert("¡Tu foto de perfil ha sido subida y actualizada con éxito!");
+        } catch (error) {
+            alert("Error al intentar subir la imagen: " + error.message);
+        } finally {
+            editBtn.textContent = "✏️";
+            editBtn.style.pointerEvents = "auto";
+            fileInput.value = ""; // Reseteamos el input
+        }
+    };
+
+    // Funcionalidad del Botón Cerrar Sesión
+    document.getElementById('btn-logout').onclick = async () => {
+        if (confirm("¿Estás seguro de que deseas cerrar tu sesión?")) {
             try {
                 if (window.firebase) {
-                    const authUser = window.firebase.auth().currentUser;
-                    if (authUser) await authUser.updateProfile({ photoURL: newPhotoUrl });
+                    await window.firebase.auth().signOut();
                 }
-                store.setState({ user: { ...user, photoURL: newPhotoUrl } });
-                alert("¡Foto de perfil actualizada con éxito!");
-            } catch (error) {
-                alert("No se pudo actualizar el avatar: " + error.message);
+                // Limpiamos el usuario en el store para refrescar la interfaz
+                store.setState({ user: null });
+                
+                // Redirigimos al Home usando el enrutador virtual de tu SPA
+                window.history.pushState({}, "", "/");
+                window.dispatchEvent(new Event('popstate'));
+            } catch (err) {
+                alert("Error al cerrar sesión: " + err.message);
             }
         }
     };
