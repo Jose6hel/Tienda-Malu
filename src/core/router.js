@@ -20,11 +20,12 @@ export function sanitize(string) {
     return string.replace(/[&<>"'/]/g, (s) => map[s]);
 }
 
-// Vista limpia inyectada directamente para sobrescribir el archivo estático corrupto
-function renderProfileDirect(container) {
+// NUEVA FUNCIÓN AISLADA: Rompe la dependencia del archivo físico corrupto y quita el lápiz/vistos recientemente
+function renderPestañaPerfil(container) {
     if (!container) return;
     const { user } = store.state;
 
+    // Si no hay usuario logueado
     if (!user) {
         container.innerHTML = `
             <div style="max-width: 500px; margin: 60px auto; padding: 32px; text-align: center; background: var(--surface); border-radius: 8px; color: var(--text); box-shadow: var(--shadow);">
@@ -41,6 +42,7 @@ function renderProfileDirect(container) {
         return;
     }
 
+    // Genera el avatar por defecto usando el email (Sin lápiz de edición ni robots gigantes)
     const avatarUrl = 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user.email || 'invitado');
 
     container.innerHTML = `
@@ -66,7 +68,7 @@ function renderProfileDirect(container) {
         </div>
     `;
 
-    // Botón interno mapeado con ID único para que no choque con el Navbar
+    // Escucha del botón de cerrar sesión corregido y atómico
     const logoutBtn = document.getElementById('btn-logout-profile');
     if (logoutBtn) {
         logoutBtn.onclick = async (e) => {
@@ -75,7 +77,7 @@ function renderProfileDirect(container) {
                 try {
                     await auth.signOut();
                     store.setState({ user: null });
-                    window.location.href = "/";
+                    window.location.href = "/"; // Redirección limpia al home limpiando estados temporales
                 } catch (err) {
                     alert("Error: " + err.message);
                 }
@@ -84,12 +86,13 @@ function renderProfileDirect(container) {
     }
 }
 
+// Mapeo estricto apuntando a la nueva función limpia
 const routes = {
     '/': renderHome,
     '/product': renderProductDetail,
     '/admin': renderAdmin,
-    '/profile': renderProfileDirect,
-    '/perfil': renderProfileDirect
+    '/profile': renderPestañaPerfil,
+    '/perfil': renderPestañaPerfil
 };
 
 async function router() {
@@ -126,7 +129,13 @@ async function router() {
     const root = document.getElementById('app-root');
     if (root) {
         root.innerHTML = ''; 
-        await viewFunction(root, currentUser?.email);
+        
+        // CORRECCIÓN: Si vamos a la pestaña de perfil, se ejecuta de forma pura sin arrastrar parámetros de emails intrusos
+        if (path === '/profile' || path === '/perfil') {
+            await viewFunction(root);
+        } else {
+            await viewFunction(root, currentUser?.email);
+        }
     }
 }
 
