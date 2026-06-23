@@ -3,6 +3,7 @@ import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
 import { sanitize } from '../core/router.js';
 import { store } from '../core/store.js';
 import { openCommentsModal } from '../components/comments.js';
+import { trackVisitedProduct } from './profile.js'; // 1. Importamos la función del historial
 
 export async function renderProductDetail(container) {
     const params = new URLSearchParams(window.location.search);
@@ -39,7 +40,10 @@ export async function renderProductDetail(container) {
 
         const product = { id: productSnap.id, ...productSnap.data() };
 
-        // 1. REGISTRO DE ANALÍTICAS ACTUALIZADO (Asegura persistencia de la propiedad views)
+        // 2. REGISTRAMOS EL PRODUCTO EN EL HISTORIAL LOCAL DEL USUARIO
+        trackVisitedProduct(product);
+
+        // REGISTRO DE ANALÍTICAS EN FIRESTORE (Métrica global del Admin)
         await updateDoc(productRef, {
             views: increment(1)
         }).catch(err => console.error("Error al registrar analítica:", err));
@@ -174,12 +178,11 @@ export async function renderProductDetail(container) {
         setupVariantSelection('color-btn');
         setupVariantSelection('size-btn');
 
-        // Evento para añadir al carrito incluyendo variantes seleccionadas de forma estricta
+        // Evento para añadir al carrito incluyendo variantes seleccionadas
         document.getElementById('btn-add-detail').onclick = () => {
             const selectedColorEl = contentEl.querySelector('.color-btn.active-variant');
             const selectedSizeEl = contentEl.querySelector('.size-btn.active-variant');
             
-            // Creamos una copia del producto adaptada con lo seleccionado para el objeto del carrito
             const customizedProduct = {
                 ...product,
                 selectedColor: selectedColorEl ? selectedColorEl.dataset.value : null,
