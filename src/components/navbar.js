@@ -2,9 +2,10 @@ import { store } from '../core/store.js';
 import { sendMagicLink, logout } from '../core/auth.js';
 import { sanitize } from '../core/router.js';
 
-// Lista unificada de administradores autorizados
+// Lista unificada de administradores autorizados (Sincronizada con admin.js)
 const ADMIN_EMAILS = [
     'jos3davidortizverano2009@gmail.com',
+    'josegamer18901@gmail.com',
     'mariaveranodevalencia@gmail.com'
 ];
 
@@ -19,7 +20,7 @@ export function renderNavbar() {
     const avatarUrl = user?.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user?.email || 'invitado');
 
     // Verificar si el usuario actual es administrador por su correo
-    const isAdmin = user && ADMIN_EMAILS.includes(user.email);
+    const isAdmin = user && user.email && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase());
 
     nav.innerHTML = `
         <nav class="navbar nav-desktop" style="box-shadow: 0 2px 4px rgba(168, 85, 247, 0.05); position: sticky; top: 0; z-index: 100; background: var(--surface);">
@@ -28,7 +29,7 @@ export function renderNavbar() {
                 <button class="btn-icon" id="theme-toggle" style="transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">${theme === 'light' ? '🌙' : '☀️'}</button>
                 <button class="btn-icon" id="cart-toggle" style="transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">🛒 <span class="badge">${totalItems}</span></button>
                 
-                ${isAdmin ? '<a href="/admin" class="btn btn-primary" style="padding:6px 12px; font-size:14px;" data-link>Panel</a>' : ''}
+                ${isAdmin ? '<a href="/admin" class="btn btn-primary" style="padding:6px 12px; font-size:14px; background:var(--primary);" data-link>Panel</a>' : ''}
                 
                 ${user ? `
                     <a href="/profile" data-link style="display: flex; align-items: center; gap: 6px; text-decoration: none; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border);">
@@ -58,6 +59,13 @@ export function renderNavbar() {
                 <span style="font-size: 18px;">${theme === 'light' ? '🌙' : '☀️'}</span>
                 <span style="font-size: 11px; color: var(--text); font-weight: 500;">Tema</span>
             </div>
+
+            ${isAdmin ? `
+                <a href="/admin" data-link style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; text-decoration: none;">
+                    <span style="font-size: 18px;">🛠️</span>
+                    <span style="font-size: 11px; color: var(--primary); font-weight: 600;">Admin</span>
+                </a>
+            ` : ''}
 
             ${user ? `
                 <a href="/profile" data-link style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; text-decoration: none;">
