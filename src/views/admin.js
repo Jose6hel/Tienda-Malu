@@ -6,7 +6,7 @@ import { sanitize } from '../core/router.js';
 // LISTA DE ADMINISTRADORES AUTORIZADOS
 const ADMIN_WHITELIST = [
     "mariaveranodevalencia@gmail.com",
-    "josegamer18901@gmail.com" // Autorizado automáticamente para tus pruebas de desarrollo
+    "jos3davidortizverano2009@gmail.com" // Autorizado automáticamente para tus pruebas de desarrollo
 ];
 
 export async function renderAdmin(container, currentUserEmail) {
