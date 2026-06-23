@@ -174,3 +174,29 @@ document.addEventListener('DOMContentLoaded', () => {
 store.subscribe(() => {
     renderNavbar();
 });
+// BLINDAJE PARA EL BOTÓN DE SALIR (Copia esto al final de router.js)
+document.addEventListener('click', async (e) => {
+    // Detectamos si el click fue en el botón de salir (clase global)
+    if (e.target.matches('.btn-logout-global') || e.target.id === 'btn-logout-profile') {
+        e.preventDefault();
+        
+        if (confirm("¿Estás seguro de que deseas cerrar tu sesión?")) {
+            try {
+                // 1. Usamos auth directamente de Firebase
+                await auth.signOut();
+                
+                // 2. Forzamos el estado de usuario a nulo
+                store.setState({ user: null });
+                
+                // 3. Limpieza total de sesión
+                localStorage.clear();
+                
+                // 4. Redirección forzada
+                window.location.href = "/";
+            } catch (err) {
+                console.error("Error al cerrar:", err);
+                alert("Hubo un error al cerrar sesión. Inténtalo de nuevo.");
+            }
+        }
+    }
+});
