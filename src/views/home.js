@@ -1,5 +1,5 @@
 import { db } from '../core/firebase.js';
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { createProductCard } from '../components/product-card.js';
 import { store } from '../core/store.js';
 
@@ -9,7 +9,7 @@ export async function renderHome(container) {
             <div style="position:relative; width:90%; max-width:450px; background:var(--surface); border-radius:var(--radius); overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); border:1px solid var(--border); transform:scale(0.9); transition:transform 0.3s ease;" id="popup-ad-card">
                 <button id="btn-close-popup" style="position:absolute; top:12px; right:12px; width:32px; height:32px; border-radius:50%; border:none; background:rgba(0,0,0,0.5); color:white; font-size:14px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10; backdrop-filter:blur(2px);">✕</button>
                 <div id="popup-ad-body">
-                    </div>
+                </div>
             </div>
         </div>
 
@@ -41,15 +41,17 @@ export async function renderHome(container) {
     const popupBody = document.getElementById('popup-ad-body');
     const closePopupBtn = document.getElementById('btn-close-popup');
 
-    // Manejo del Popup publicitario administrable
+    // Manejo del Popup publicitario administrable desde la sección Marquesina Global
     const checkPopupAd = async () => {
         try {
-            const q = query(collection(db, "popup_ads"), where("active", "==", true));
-            const snap = await getDocs(q);
+            // Consultamos la colección unificada con la sección de administración
+            const snap = await getDocs(collection(db, "announcements"));
             if (!snap.empty) {
                 const adData = snap.docs[0].data();
-                if (adData.imageUrl) {
-                    popupBody.innerHTML = `<img src="${adData.imageUrl}" alt="Anuncio Especial" style="width:100%; height:auto; display:block; object-fit:contain; max-height:75vh;">`;
+                
+                // Solo se despliega el pop-up si el administrador subió una imagen válida
+                if (adData.popupImageUrl) {
+                    popupBody.innerHTML = `<img src="${adData.popupImageUrl}" alt="Anuncio Especial" style="width:100%; height:auto; display:block; object-fit:contain; max-height:75vh;">`;
                     
                     // Mostrar con micro-animación fluida
                     popupOverlay.classList.remove('hidden');
@@ -68,7 +70,9 @@ export async function renderHome(container) {
                     popupOverlay.onclick = (e) => { if (e.target === popupOverlay) closePopup(); };
                 }
             }
-        } catch (err) { console.log("Módulo de publicidad pasivo o sin anuncios configurados."); }
+        } catch (err) { 
+            console.log("Módulo de publicidad pasivo o sin anuncios configurados."); 
+        }
     };
 
     try {
@@ -136,14 +140,11 @@ export async function renderHome(container) {
             
             // --- AJUSTE: Interceptar clicks generales en las tarjetas creadas para usar SPA nativo ---
             productsGrid.querySelectorAll('.card, [data-link]').forEach(card => {
-                // Si la tarjeta en sí misma o su contenedor redirige, atrapamos el click de forma segura
                 card.onclick = (e) => {
-                    // Si dio click al botón del carrito, detenemos esta acción para que no interfiera
                     if (e.target.closest('.btn-add-cart')) return;
 
                     e.preventDefault();
                     
-                    // Buscamos el ID del producto asociado. Si no está en un dataset, lo extraemos del href interno
                     const anchor = card.tagName === 'A' ? card : card.querySelector('a');
                     const urlStr = anchor ? anchor.getAttribute('href') : '';
                     
@@ -161,7 +162,6 @@ export async function renderHome(container) {
                     e.preventDefault();
                     const prod = list.find(item => item.id === btn.dataset.id);
                     if (prod) {
-                        // Si tiene variantes forzamos a que entre al detalle de forma SPA limpia
                         if ((prod.colors && prod.colors.length > 0) || (prod.sizes && prod.sizes.length > 0)) {
                             window.history.pushState({}, "", `/product?id=${prod.id}`);
                             window.dispatchEvent(new Event('popstate'));
@@ -185,7 +185,6 @@ export async function renderHome(container) {
             const filtered = organizedProducts.filter(p => {
                 const matchesSearch = p.name.toLowerCase().includes(queryText) || p.description?.toLowerCase().includes(queryText);
                 
-                // Normalizar categorías del producto (soporta String tradicional o Array múltiple)
                 const productCategories = Array.isArray(p.category) 
                     ? p.category.map(c => c.toLowerCase()) 
                     : [String(p.category || 'General').toLowerCase()];
@@ -200,7 +199,7 @@ export async function renderHome(container) {
         searchInput.oninput = filterProducts;
         categoryFilter.onchange = filterProducts;
 
-        // Ejecutar revisión del Popup publicitario al renderizar la casa
+        // Ejecutar revisión del Popup publicitario al renderizar la landing page
         await checkPopupAd();
 
     } catch (error) {
