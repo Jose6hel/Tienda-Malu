@@ -2,7 +2,7 @@ import { store } from '../core/store.js';
 import { sendMagicLink, logout } from '../core/auth.js';
 import { sanitize } from '../core/router.js';
 
-// Lista unificada de administradores autorizados
+// Lista unificada de administradores autorizados (Sincronizada con admin.js)
 const ADMIN_EMAILS = [
     'jos3davidortizverano2009@gmail.com',
     'josegamer18901@gmail.com',
@@ -16,10 +16,10 @@ export function renderNavbar() {
 
     document.documentElement.setAttribute('data-theme', theme);
 
-    // Imagen de perfil dinámica basada en el correo o un avatar por defecto
+    // Imagen de perfil dinámica basada en el correo del usuario conectado o un avatar por defecto
     const avatarUrl = user?.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + (user?.email || 'invitado');
 
-    // Verificar si el usuario actual es administrador
+    // Verificar si el usuario actual es administrador por su correo
     const isAdmin = user && user.email && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase());
 
     nav.innerHTML = `
@@ -68,10 +68,10 @@ export function renderNavbar() {
             ` : ''}
 
             ${user ? `
-                <div id="btn-logout-mobile" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
-                    <span style="font-size: 18px;">🚪</span>
-                    <span style="font-size: 11px; color: #EF4444; font-weight: 600;">Salir</span>
-                </div>
+                <a href="/profile" data-link style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; text-decoration: none;">
+                    <img src="${avatarUrl}" alt="Perfil" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover; border: 1px solid var(--primary);">
+                    <span style="font-size: 11px; color: var(--text); font-weight: 500;">Perfil</span>
+                </a>
             ` : `
                 <div id="btn-login-mobile" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
                     <span style="font-size: 18px;">🔑</span>
@@ -91,6 +91,7 @@ export function renderNavbar() {
         </style>
     `;
 
+    // Renderizado del Sidebar del Carrito
     renderCartSidebar();
 
     // --- Vinculación de Eventos ---
@@ -105,26 +106,8 @@ export function renderNavbar() {
         document.getElementById('cart-sidebar').classList.add('open');
     };
 
-    // Función de cierre unificada para evitar trabas de estado
-    const handleSignOut = async (e) => {
-        e.preventDefault();
-        if (confirm("¿Estás seguro de que deseas cerrar tu sesión?")) {
-            try {
-                await logout();
-                store.setState({ user: null });
-                window.location.href = "/"; 
-            } catch (err) {
-                alert("Error al cerrar sesión: " + err.message);
-            }
-        }
-    };
-
     if (document.getElementById('btn-logout')) {
-        document.getElementById('btn-logout').onclick = handleSignOut;
-    }
-
-    if (document.getElementById('btn-logout-mobile')) {
-        document.getElementById('btn-logout-mobile').onclick = handleSignOut;
+        document.getElementById('btn-logout').onclick = logout;
     }
 
     if (document.getElementById('btn-login-modal')) {
@@ -216,7 +199,10 @@ function renderCartSidebar() {
     });
 
     sidebar.querySelectorAll('.btn-whatsapp-checkout').forEach(btn => {
-        btn.onclick = () => handleCheckout(btn.dataset.number);
+        btn.onclick = () => {
+            const phoneNumber = btn.dataset.number;
+            handleCheckout(phoneNumber);
+        };
     });
 }
 

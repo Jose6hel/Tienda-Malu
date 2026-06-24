@@ -39,26 +39,7 @@ export async function renderProductDetail(container) {
 
         const product = { id: productSnap.id, ...productSnap.data() };
 
-        // ==========================================================
-        // GUARDADO DIRECTO EN LOCALSTORAGE (Sin importar de profile.js)
-        // ==========================================================
-        try {
-            let currentViews = JSON.parse(localStorage.getItem('recent_views')) || [];
-            currentViews = currentViews.filter(p => p.id !== product.id);
-            currentViews.unshift({
-                id: product.id,
-                name: product.name,
-                price: product.price,
-                images: product.images || (product.imageUrl ? [product.imageUrl] : [])
-            });
-            if (currentViews.length > 4) currentViews.pop();
-            localStorage.setItem('recent_views', JSON.stringify(currentViews));
-        } catch (e) {
-            console.error("Error al registrar historial local:", e);
-        }
-        // ==========================================================
-
-        // REGISTRO DE ANALÍTICAS EN FIRESTORE
+        // 1. REGISTRO DE ANALÍTICAS ACTUALIZADO (Asegura persistencia de la propiedad views)
         await updateDoc(productRef, {
             views: increment(1)
         }).catch(err => console.error("Error al registrar analítica:", err));
@@ -193,11 +174,12 @@ export async function renderProductDetail(container) {
         setupVariantSelection('color-btn');
         setupVariantSelection('size-btn');
 
-        // Evento para añadir al carrito incluyendo variantes seleccionadas
+        // Evento para añadir al carrito incluyendo variantes seleccionadas de forma estricta
         document.getElementById('btn-add-detail').onclick = () => {
             const selectedColorEl = contentEl.querySelector('.color-btn.active-variant');
             const selectedSizeEl = contentEl.querySelector('.size-btn.active-variant');
             
+            // Creamos una copia del producto adaptada con lo seleccionado para el objeto del carrito
             const customizedProduct = {
                 ...product,
                 selectedColor: selectedColorEl ? selectedColorEl.dataset.value : null,
