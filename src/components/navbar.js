@@ -67,12 +67,12 @@ export function renderNavbar() {
                 </a>
             ` : ''}
 
-          ${user ? `
-    <div id="btn-logout-mobile" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
-        <span style="font-size: 18px;">🚪</span>
-        <span style="font-size: 11px; color: #EF4444; font-weight: 600;">Salir</span>
-    </div>
-` : `
+            ${user ? `
+                <div id="btn-logout-mobile" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
+                    <span style="font-size: 18px;">🚪</span>
+                    <span style="font-size: 11px; color: #EF4444; font-weight: 600;">Salir</span>
+                </div>
+            ` : `
                 <div id="btn-login-mobile" style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;">
                     <span style="font-size: 18px;">🔑</span>
                     <span style="font-size: 11px; color: var(--text); font-weight: 500;">Ingresar</span>
@@ -120,12 +120,12 @@ export function renderNavbar() {
     };
 
     if (document.getElementById('btn-logout')) {
-    document.getElementById('btn-logout').onclick = handleSignOut;
-}
+        document.getElementById('btn-logout').onclick = handleSignOut;
+    }
 
-if (document.getElementById('btn-logout-mobile')) {
-    document.getElementById('btn-logout-mobile').onclick = handleSignOut;
-}
+    if (document.getElementById('btn-logout-mobile')) {
+        document.getElementById('btn-logout-mobile').onclick = handleSignOut;
+    }
 
     if (document.getElementById('btn-login-modal')) {
         document.getElementById('btn-login-modal').onclick = showLoginPrompt;
